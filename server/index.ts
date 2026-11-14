@@ -84,14 +84,15 @@ async function askGemini<T extends z.ZodType>(schema: T, system: string, message
         generationConfig: { responseMimeType: 'application/json', responseJsonSchema: jsonSchema },
       }),
     })
-    if (!r.ok) throw new Error(`${r.status} ${(await r.text()).slice(0, 300)}`)
+    // one log line with Google's own message (the key itself is never in it)
+    if (!r.ok) throw new Error(`${r.status} ${(await r.text()).replace(/\s+/g, ' ').slice(0, 300)}`)
     const j = (await r.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] }
     const text = j.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? ''
     const parsed = schema.safeParse(JSON.parse(text))
     if (!parsed.success) throw new Error('schema mismatch: ' + parsed.error.message.slice(0, 200))
     return parsed.data
   } catch (err) {
-    console.error('[ai] gemini failed, falling back to demo:', err)
+    console.error('[ai] gemini failed, falling back to demo:', err instanceof Error ? err.message : err)
     return null
   }
 }
