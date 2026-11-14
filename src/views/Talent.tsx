@@ -6,6 +6,7 @@ import { EVENT } from '../lib/data'
 import { allocate } from '../lib/seating'
 import type { ChallengeCard, Strength, TranslateResult } from '../lib/types'
 import { fitSkills } from '../lib/fit'
+import { live, myPerson, savePerson } from '../lib/live'
 import ChallengeCardView from './ChallengeCardView'
 import LiveView from './Live'
 import TalkInterview from './TalkInterview'
@@ -25,7 +26,7 @@ const FILTERS = {
 const STEPS = ['About you', 'Pick tables', 'Confirm', 'Your pass', 'Event day']
 
 export default function TalentView() {
-  const { cards, talents, me, setMe } = useStore()
+  const { cards, talents, me, setMe, refresh } = useStore()
   const [step, setStep] = useState(0)
   const [mode, setMode] = useState<'talk' | 'write'>('talk')
   const [text, setText] = useState(AMIRA)
@@ -34,6 +35,7 @@ export default function TalentView() {
   const [kept, setKept] = useState<Strength[]>([])
   const [bestFirst, setBestFirst] = useState(true)
   const [langs, setLangs] = useState<string[]>(['English'])
+  const [myName, setMyName] = useState(() => myPerson()?.name ?? '')
   const [filter, setFilter] = useState<keyof typeof FILTERS>('all')
   const [picks, setPicks] = useState<string[]>(me.choices)
   const [checks, setChecks] = useState<Record<string, boolean>>({})
@@ -65,7 +67,8 @@ export default function TalentView() {
     return allocate(cards, talents).seats.filter((s) => s.talent === me.code).sort((a, b) => a.round - b.round)
   }, [step, cards, talents, me.code])
 
-  const liveTable = picks.includes('kvanttia') ? 'kvanttia' : (picks[0] ?? 'kvanttia')
+  // A table published live by a real company comes first, so two devices meet at the same table.
+  const liveTable = picks.find((id) => id.startsWith('c-')) ?? (picks.includes('kvanttia') ? 'kvanttia' : (picks[0] ?? 'kvanttia'))
 
   const go = (i: number) => {
     setStep(i)
@@ -226,6 +229,10 @@ export default function TalentView() {
                   </div>
                 )
               })}
+              <label className="block space-y-1 pt-3">
+                <span className="block text-xl font-bold">Your first name</span>
+                <input className="input" placeholder="Only shown after you both say yes" value={myName} onChange={(e) => setMyName(e.target.value)} />
+              </label>
               <h3 className="pt-3 text-xl font-bold">Languages I can work in</h3>
               <div className="flex flex-wrap gap-2">
                 {WORK_LANGS.map((l) => {
@@ -263,10 +270,23 @@ export default function TalentView() {
           </div>
           <NavBar
             onBack={() => go(1)}
-            onNext={() => {
-              setMe({ ...me, languages: langs, choices: picks, checks: Object.keys(checks).filter((k) => checks[k]) })
+            onNext={async () => {
+              const checked = Object.keys(checks).filter((k) => checks[k])
+              let code = me.code
+              try {
+                // Register on the shared event so companies see this person (as a code) at their table.
+                const r = await live.register({ name: myName.trim(), skills: kept.map((k) => k.plain), languages: langs, choices: picks, checks: checked })
+                savePerson({ ...r, name: myName.trim() })
+                code = r.code
+              } catch {
+                // offline demo: keep the local code
+              }
+              setMe({ ...me, code, languages: langs, choices: picks, checks: checked })
+              refresh()
               go(3)
             }}
+            disabled={!myName.trim()}
+            hint="Add your first name"
             nextLabel="Confirm & get my pass"
           />
         </>

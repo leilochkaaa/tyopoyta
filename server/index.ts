@@ -7,6 +7,7 @@ import express from 'express'
 import Anthropic from '@anthropic-ai/sdk'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import { z } from 'zod'
+import { mountLive } from './live.ts'
 import { DEMO_TALK_I18N, demoTranslate, meaningful, DEMO_CARD, DEMO_QUESTIONS, DEMO_RECAP, DEMO_TALK, DEMO_TRANSLATE } from './demo.ts'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -120,7 +121,7 @@ app.use(express.json({ limit: '200kb' }))
 
 // The API spends paid credits, so cap each client at 60 calls a minute.
 const hits = new Map<string, { n: number; t: number }>()
-app.use('/api', (req, res, next) => {
+app.use(['/api/intake', '/api/talk', '/api/translate', '/api/recap', '/api/stt', '/api/tts', '/api/org/login'], (req, res, next) => {
   const ip = req.ip ?? 'anon'
   const now = Date.now()
   const h = hits.get(ip)
@@ -284,6 +285,8 @@ ${GUARDRAILS}`
   res.json(out ? { ...out, mode: 'live' } : DEMO_RECAP)
 })
 
+const live = mountLive(app, path.resolve(here, '../data'))
+
 // ---- Organisers only: password login + the company pipeline (CRM) ----
 const ORG_PASSWORD = process.env.ORGANIZER_PASSWORD ?? 'espoo2026'
 if (!process.env.ORGANIZER_PASSWORD) console.warn('[org] ORGANIZER_PASSWORD not set, using the demo password')
@@ -339,6 +342,7 @@ const saveProspects = () => {
 }
 
 app.get('/api/org/companies', orgOnly, (_req, res) => res.json(prospects))
+app.get('/api/org/live', orgOnly, (_req, res) => res.json(live.counts()))
 app.post('/api/org/companies', orgOnly, (req, res) => {
   const p = Prospect.safeParse(req.body)
   if (!p.success) return res.status(400).json({ error: 'Company name is required' })

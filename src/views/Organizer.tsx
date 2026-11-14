@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ArrowRight, Bell, Building2, CalendarClock, Check, CheckCircle2, Copy, Dices, Eye, EyeOff, Megaphone, Radar, Scale, TrendingUp, TriangleAlert } from 'lucide-react'
 import { useStore } from '../lib/store'
 import { EVENT } from '../lib/data'
@@ -34,6 +34,18 @@ export default function OrganizerView() {
   const { cards, talents } = useStore()
   const [token, setToken] = useState<string | null>(readToken)
   const [tab, setTab] = useState(0)
+  const [liveCounts, setLiveCounts] = useState<{ people: number; companies: number; matches: number } | null>(null)
+  useEffect(() => {
+    if (!token) return
+    const load = () =>
+      fetch('/api/org/live', { headers: { Authorization: `Bearer ${token}` } })
+        .then((r) => (r.ok ? r.json() : null))
+        .then(setLiveCounts)
+        .catch(() => {})
+    load()
+    const t = setInterval(load, 4000)
+    return () => clearInterval(t)
+  }, [token])
   const [nudged, setNudged] = useState<string[]>([])
   const [inviteFor, setInviteFor] = useState<string | null>(null)
   const [sent, setSent] = useState<string[]>([])
@@ -52,6 +64,11 @@ export default function OrganizerView() {
           {EVENT.date} · {EVENT.place} · 21 days to go
         </p>
         <h1 className="mt-2 text-4xl font-extrabold leading-tight md:text-5xl">{EVENT.name}</h1>
+        {liveCounts && (
+          <p className="mt-3 flex items-center gap-2 text-lg font-semibold">
+            <span className="h-2.5 w-2.5 rounded-full bg-mint" /> Live now: {liveCounts.people} people registered, {liveCounts.companies} companies published, {liveCounts.matches} mutual matches
+          </p>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-1.5 rounded-3xl bg-ink/6 p-1.5 md:grid-cols-4">

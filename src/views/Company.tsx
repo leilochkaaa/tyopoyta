@@ -7,6 +7,7 @@ import type { ChallengeCard, IntakeResult, IntakeTurn } from '../lib/types'
 import ChallengeCardView from './ChallengeCardView'
 import LiveView from './Live'
 import TaskLibrary from './TaskLibrary'
+import { live, saveTableKey } from '../lib/live'
 import { NavBar, StepHeader, Stepper } from './Wizard'
 
 // Example answers so the demo can be clicked through quickly on stage.
@@ -31,6 +32,7 @@ const FOLLOW_UPS = ['45-min follow-up within 7 days if it’s mutual', 'Intervie
 export default function CompanyView() {
   const { cards, upsertCard } = useStore()
   const existing = cards.find((c) => c.id === 'virta')!
+  const [tableId, setTableId] = useState('virta')
   const [step, setStep] = useState(0)
   const [turns, setTurns] = useState<IntakeTurn[]>([])
   const [draft, setDraft] = useState('')
@@ -331,7 +333,7 @@ export default function CompanyView() {
             <ChallengeCardView card={full} />
             {approved && (
               <div className="pop flex items-center gap-3 rounded-3xl bg-mint-soft p-5 text-xl font-bold text-mint">
-                <CheckCircle2 size={28} className="shrink-0" /> Published. Job seekers can pick your table now.
+                <CheckCircle2 size={28} className="shrink-0" /> Published. Job seekers on any phone can pick your table now.
               </div>
             )}
           </div>
@@ -340,9 +342,17 @@ export default function CompanyView() {
           ) : (
             <NavBar
               onBack={() => go(0)}
-              onNext={() => {
+              onNext={async () => {
                 setApproved(true)
-                upsertCard({ ...full, status: 'approved' })
+                try {
+                  // Publish to the shared event: job seekers on any device can now pick this table.
+                  const r = await live.publish({ ...full, status: 'approved' })
+                  saveTableKey(r.id, r.token)
+                  upsertCard({ ...full, id: r.id, status: 'approved' })
+                  setTableId(r.id)
+                } catch {
+                  upsertCard({ ...full, status: 'approved' })
+                }
               }}
               nextLabel="Approve & publish"
             />
@@ -355,7 +365,7 @@ export default function CompanyView() {
           <StepHeader eyebrow="Step 3 · Event day" title={format === 'team' ? 'Your team sprint: 12 people, one real problem' : 'Your table: 4 people, one real problem'}>
             You see names only when it’s mutual.
           </StepHeader>
-          <LiveView as="company" tableId="virta" />
+          <LiveView as="company" tableId={tableId} />
           <NavBar onBack={() => go(1)} />
         </>
       )}

@@ -4,6 +4,7 @@ import { post, useStore } from '../lib/store'
 import { EVENT } from '../lib/data'
 import { allocate } from '../lib/seating'
 import { TeamPlan } from './ChallengeCardView'
+import { live, myPerson, tableKeys } from '../lib/live'
 import type { Recap } from '../lib/types'
 
 // What the participant answered in the debrief, as the host noted it (demo content).
@@ -63,18 +64,24 @@ function Phone({ title, children }: { title: string; children: React.ReactNode }
 
 // Event day from one side's perspective; the other side is simulated.
 export default function LiveView({ as, tableId = 'kvanttia' }: { as: 'talent' | 'company'; tableId?: string }) {
-  const { cards, talents, me, go } = useStore()
+  const { cards, talents, me, go, livePeople } = useStore()
   const table = cards.find((c) => c.id === tableId)!
   const round = 1
+  // Real people registered on the shared event (codes T-200+); everyone else is the synthetic crowd.
+  const isRealCode = (c: string) => livePeople.some((p) => p.code === c)
+  const tableKey = as === 'company' ? tableKeys()[tableId] : undefined
+  const person = as === 'talent' ? myPerson() : null
+  const liveTable = Boolean((table as { live?: boolean }).live)
   const seated = useMemo(() => {
-    const codes = allocate(cards, talents)
-      .seats.filter((s) => s.table === table.id && s.round === round)
-      .map((s) => s.talent)
-      .filter((c) => c !== me.code)
+    const seats = allocate(cards, talents).seats.filter((s) => s.table === table.id)
+    // The demo shows one round. Real people at this table are shown whichever round the lottery gave them.
+    const real = seats.filter((s) => isRealCode(s.talent)).map((s) => s.talent)
+    const codes = [...new Set([...real, ...seats.filter((s) => s.round === round).map((s) => s.talent)])].filter((c) => c !== me.code)
     // a freshly published table has no lottery seats yet — fill it for the demo
-    const pad = talents.map((t) => t.code).filter((c) => c !== me.code && !codes.includes(c))
-    return [me.code, ...codes, ...pad].slice(0, table.seatsPerRound)
-  }, [cards, talents, me.code, table])
+    const pad = talents.map((t) => t.code).filter((c) => c !== me.code && !codes.includes(c) && !c.startsWith('T-2'))
+    const realFirst = [...codes].sort((a, b) => Number(isRealCode(b)) - Number(isRealCode(a)))
+    return [...(as === 'talent' ? [me.code] : []), ...realFirst, ...pad].slice(0, table.seatsPerRound)
+  }, [cards, talents, me.code, table, as, livePeople])
 
   const [phase, setPhase] = useState(0)
   const [secs, setSecs] = useState(EVENT.sprintMinutes * 60)
@@ -94,17 +101,41 @@ export default function LiveView({ as, tableId = 'kvanttia' }: { as: 'talent' | 
   const questions = table.debriefQuestions?.length ? table.debriefQuestions : ['How did you approach it?', 'What would you do next?', 'What would you need from us?']
   const answers = ANSWERS[key]
 
-  // Company perspective: host picks; participants' answers are simulated.
+  // Live data from the other device, polled every 3 seconds.
+  const [serverTable, setServerTable] = useState<Awaited<ReturnType<typeof live.table>> | null>(null)
+  const [serverMe, setServerMe] = useState<Awaited<ReturnType<typeof live.me>> | null>(null)
+  const [pollTick, setPollTick] = useState(0)
+  useEffect(() => {
+    const t = setInterval(() => setPollTick((x) => x + 1), 3000)
+    return () => clearInterval(t)
+  }, [])
+  useEffect(() => {
+    if (tableKey) live.table(tableId, tableKey).then(setServerTable).catch(() => {})
+    if (person && liveTable) live.me(person.token).then(setServerMe).catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pollTick, tableKey, tableId, liveTable])
+
+  // Company perspective: host picks. Real people answer from their own phones; the synthetic crowd is simulated.
   const [hostYes, setHostYes] = useState<string[]>([])
-  const talentYes = useMemo(() => new Set([me.code, ...seated.filter((_, i) => i % 2 === 0)]), [seated, me.code])
-  // Talent perspective: Amira answers; the host has (simulated) chosen her.
+  const talentYes = useMemo(
+    () => new Set([...seated.filter((c, i) => !isRealCode(c) && i % 2 === 0), ...(serverTable?.talentYes ?? [])]),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [seated, serverTable],
+  )
+  // Talent perspective: on a live table the company decides on its own device; demo tables simulate a yes.
   const [myYes, setMyYes] = useState<boolean | null>(null)
-  const matchedCodes = as === 'company' ? hostYes.filter((c) => talentYes.has(c)) : myYes ? [me.code] : []
+  const companyAgreed = liveTable ? Boolean(serverMe?.matches.some((m) => m.table === table.id)) : true
+  const matchedCodes = as === 'company' ? hostYes.filter((c) => talentYes.has(c)) : myYes && companyAgreed ? [me.code] : []
+  const waitingForCompany = as === 'talent' && myYes === true && !companyAgreed
+  const realDebrief = (c: string) => serverTable?.debriefs.find((d) => d.code === c)
+  const realName = (c: string) => serverTable?.matches.find((m) => m.code === c)?.name
+  const liveNote = serverMe?.matches.find((m) => m.table === table.id)?.note ?? null
 
   const isTeam = table.format === 'team'
   const teams = isTeam ? [0, 1, 2].map((t) => seated.slice(t * 4, t * 4 + 4)) : [seated]
   const partOf = (j: number) => table.parts?.at(j % 4)?.split(':')[0] ?? `Part ${j + 1}`
   const simLine = (c: string) => {
+    if (isRealCode(c)) return realDebrief(c)?.contribution || 'Still writing their answers…'
     const j = seated.indexOf(c) % 4
     return SIM_LINES[demoKey]?.at(j) ?? `Worked on “${partOf(j)}” and explained it to the team.`
   }
@@ -242,7 +273,14 @@ export default function LiveView({ as, tableId = 'kvanttia' }: { as: 'talent' | 
             >
               Use example answers
             </button>
-            <button className="btn-primary px-7 text-lg" disabled={!talentReady} onClick={() => setPhase(2)}>
+            <button
+              className="btn-primary px-7 text-lg"
+              disabled={!talentReady}
+              onClick={() => {
+                if (person) live.debrief({ table: table.id, token: person.token, answers: myAnswers, contribution, link }).catch(() => {})
+                setPhase(2)
+              }}
+            >
               Next: would you like to continue? <ArrowRight size={20} />
             </button>
           </div>
@@ -309,7 +347,14 @@ export default function LiveView({ as, tableId = 'kvanttia' }: { as: 'talent' | 
             >
               Use example notes
             </button>
-            <button className="btn-primary px-7 text-lg" onClick={() => setPhase(2)}>
+            <button
+              className="btn-primary px-7 text-lg"
+              onClick={() => {
+                if (tableKey)
+                  seated.filter(isRealCode).forEach((c) => live.note({ table: tableId, code: c, token: tableKey, seen: seen[c] ?? [], note: notes[c] ?? '' }).catch(() => {}))
+                setPhase(2)
+              }}
+            >
               Next: would you like to continue? <ArrowRight size={20} />
             </button>
           </div>
@@ -321,10 +366,16 @@ export default function LiveView({ as, tableId = 'kvanttia' }: { as: 'talent' | 
           {as === 'talent' ? (
             <Phone title={`Continue with ${table.company}?`}>
               <div className="space-y-3">
-                <button className={`btn w-full py-4 text-xl ${myYes ? 'bg-mint text-white' : 'bg-brand text-white hover:bg-brand-deep'}`} onClick={() => setMyYes(true)}>
+                <button className={`btn w-full py-4 text-xl ${myYes ? 'bg-mint text-white' : 'bg-brand text-white hover:bg-brand-deep'}`} onClick={() => {
+                    setMyYes(true)
+                    if (person) live.decide(table.id, me.code, true, person.token).catch(() => {})
+                  }}>
                   <Heart size={22} /> Yes
                 </button>
-                <button className={`btn w-full py-4 text-xl ${myYes === false ? 'bg-ink text-white' : 'bg-ink/6'}`} onClick={() => setMyYes(false)}>
+                <button className={`btn w-full py-4 text-xl ${myYes === false ? 'bg-ink text-white' : 'bg-ink/6'}`} onClick={() => {
+                    setMyYes(false)
+                    if (person) live.decide(table.id, me.code, false, person.token).catch(() => {})
+                  }}>
                   Not for me
                 </button>
                 <p className="pt-1 text-center text-ink/70">The company never sees a “no”.</p>
@@ -336,10 +387,17 @@ export default function LiveView({ as, tableId = 'kvanttia' }: { as: 'talent' | 
                 {seated.map((c) => (
                   <button
                     key={c}
-                    onClick={() => setHostYes((h) => (h.includes(c) ? h.filter((x) => x !== c) : [...h, c]))}
+                    onClick={() => {
+                      const yes = !hostYes.includes(c)
+                      setHostYes((h) => (yes ? [...h, c] : h.filter((x) => x !== c)))
+                      if (tableKey && isRealCode(c)) live.decide(tableId, c, yes, tableKey).catch(() => {})
+                    }}
                     className={`flex w-full items-center justify-between rounded-2xl border-2 px-4 py-3 text-lg transition ${hostYes.includes(c) ? 'border-brand bg-brand-soft' : 'border-ink/10'}`}
                   >
-                    <span className="font-bold">{c}</span>
+                    <span className="flex items-center gap-2 font-bold">
+                      {c}
+                      {isRealCode(c) && <span className="h-2.5 w-2.5 rounded-full bg-mint" title="A real person on another device" />}
+                    </span>
                     <Heart size={22} className={hostYes.includes(c) ? 'fill-brand text-brand' : 'text-ink/60'} />
                   </button>
                 ))}
@@ -358,7 +416,7 @@ export default function LiveView({ as, tableId = 'kvanttia' }: { as: 'talent' | 
               </div>
             ) : (
             <button className="btn-primary px-7 text-lg" disabled={matchedCodes.length === 0} onClick={() => setPhase(3)}>
-              {matchedCodes.length ? `See ${matchedCodes.length} mutual match${matchedCodes.length > 1 ? 'es' : ''}` : as === 'talent' ? 'Tap “Yes” first' : 'Tap the people you’d like to meet'} <ArrowRight size={20} />
+              {matchedCodes.length ? `See ${matchedCodes.length} mutual match${matchedCodes.length > 1 ? 'es' : ''}` : waitingForCompany ? `Waiting for ${table.company}…` : as === 'talent' ? 'Tap “Yes” first' : 'Tap the people you’d like to meet'} <ArrowRight size={20} />
             </button>
             )}
           </div>
@@ -373,7 +431,7 @@ export default function LiveView({ as, tableId = 'kvanttia' }: { as: 'talent' | 
               <BadgeCheck size={30} className="shrink-0 text-berry" />
               <div className="flex-1">
                 <div className="text-lg text-white/75">Sprint Record</div>
-                <div className="font-display text-2xl font-extrabold">{as === 'company' ? NAMES[seated.indexOf(matchedCodes[0])] ?? 'Amira K.' : 'Amira K.'}</div>
+                <div className="font-display text-2xl font-extrabold">{as === 'company' ? (realName(matchedCodes[0]) ?? NAMES[seated.indexOf(matchedCodes[0])] ?? 'Amira K.') : (person?.name ?? 'Amira K.')}</div>
               </div>
               <div className="text-right text-white/75">{table.company}</div>
             </div>
@@ -401,23 +459,23 @@ export default function LiveView({ as, tableId = 'kvanttia' }: { as: 'talent' | 
               <div>
                 <div className="font-bold">Their answers</div>
                 <ul className="mt-1 space-y-1.5">
-                  {(as === 'talent' ? myAnswers : answers).map((a, i) => (
+                  {(as === 'talent' ? myAnswers : (realDebrief(matchedCodes[0])?.answers ?? answers)).map((a, i) => (
                     <li key={i}>• {a}</li>
                   ))}
                 </ul>
               </div>
               <div className="space-y-3 rounded-3xl bg-brand-soft p-5">
                 <div className="font-bold text-brand">The host noticed</div>
-                {as === 'company' && seen[matchedCodes[0]]?.length ? (
+                {(as === 'company' ? seen[matchedCodes[0]] : liveNote?.seen)?.length ? (
                   <div className="flex flex-wrap gap-2">
-                    {seen[matchedCodes[0]].map((b) => (
+                    {(as === 'company' ? seen[matchedCodes[0]] : liveNote!.seen).map((b) => (
                       <span key={b} className="chip bg-mint text-white">
                         <Check size={16} /> {b}
                       </span>
                     ))}
                   </div>
                 ) : null}
-                <div>“{(as === 'company' && notes[matchedCodes[0]]) || HOST_NOTE[key]}”</div>
+                <div>“{(as === 'company' ? notes[matchedCodes[0]] : liveNote?.note) || (liveTable ? 'The host left no note.' : HOST_NOTE[key])}”</div>
               </div>
               {as === 'talent' &&
                 (attach ? (
@@ -477,7 +535,7 @@ export default function LiveView({ as, tableId = 'kvanttia' }: { as: 'talent' | 
                         await post<Recap>('/api/recap', {
                           cardTitle: table.title,
                           problem: table.problem,
-                          debrief: questions.map((q, i) => `Q: ${q}\nA: ${(as === 'talent' ? myAnswers : answers).at(i) ?? ''}`).join('\n'),
+                          debrief: questions.map((q, i) => `Q: ${q}\nA: ${(as === 'talent' ? myAnswers : (realDebrief(matchedCodes[0])?.answers ?? answers)).at(i) ?? ''}`).join('\n'),
                           companyNote: (as === 'company' && notes[matchedCodes[0]]) || HOST_NOTE[key],
                           talentNote: as === 'talent' ? `${contribution} ${TALENT_NOTE[key]}` : `${simLine(matchedCodes[0])} ${TALENT_NOTE[key]}`,
                           promise: (table.followUp || '').replace(' if it’s mutual', ''),
