@@ -473,7 +473,17 @@ export default function LiveView({ as, tableId = 'kvanttia' }: { as: 'talent' | 
                   onClick={async () => {
                     setBusy(true)
                     try {
-                      setRecap(await post<Recap>('/api/recap', { cardTitle: table.title, companyNote: (as === 'company' && notes[matchedCodes[0]]) || HOST_NOTE[key], talentNote: as === 'talent' ? `${contribution} ${myAnswers.join(' ')}` : TALENT_NOTE[key] }))
+                      setRecap(
+                        await post<Recap>('/api/recap', {
+                          cardTitle: table.title,
+                          problem: table.problem,
+                          debrief: questions.map((q, i) => `Q: ${q}\nA: ${(as === 'talent' ? myAnswers : answers).at(i) ?? ''}`).join('\n'),
+                          companyNote: (as === 'company' && notes[matchedCodes[0]]) || HOST_NOTE[key],
+                          talentNote: as === 'talent' ? `${contribution} ${TALENT_NOTE[key]}` : `${simLine(matchedCodes[0])} ${TALENT_NOTE[key]}`,
+                          promise: (table.followUp || '').replace(' if it’s mutual', ''),
+                          booked: booked ?? '',
+                        }),
+                      )
                     } catch {
                       setRecapErr(true)
                     } finally {
@@ -485,18 +495,22 @@ export default function LiveView({ as, tableId = 'kvanttia' }: { as: 'talent' | 
                 </button>
               ) : (
                 <div className="pop space-y-4 text-lg">
-                  <div>
-                    <div className="font-bold">You both talked about</div>
-                    {recap.common_ground.map((x) => (
-                      <div key={x}>• {x}</div>
-                    ))}
-                  </div>
-                  <div>
-                    <div className="font-bold">Still open</div>
-                    {recap.open_questions.map((x) => (
-                      <div key={x}>• {x}</div>
-                    ))}
-                  </div>
+                  {recap.common_ground.length > 0 && (
+                    <div>
+                      <div className="font-bold">You both talked about</div>
+                      {recap.common_ground.map((x) => (
+                        <div key={x}>• {x}</div>
+                      ))}
+                    </div>
+                  )}
+                  {recap.open_questions.length > 0 && (
+                    <div>
+                      <div className="font-bold">To clarify next time</div>
+                      {recap.open_questions.map((x) => (
+                        <div key={x}>• {x}</div>
+                      ))}
+                    </div>
+                  )}
                   <div className="rounded-2xl bg-mint-soft p-4">
                     <div className="font-bold text-mint">Next step</div>
                     {recap.suggested_next_step}

@@ -43,6 +43,10 @@ export default function CompanyView() {
   const [where, setWhere] = useState<ChallengeCard['where']>('both')
   const [mode, setMode] = useState<'talk' | 'library'>('talk')
   const [editing, setEditing] = useState(false)
+  // The company says who it is first; the AI interview starts after that.
+  const [name, setName] = useState('')
+  const [blurb, setBlurb] = useState('')
+  const [named, setNamed] = useState(false)
   const bottom = useRef<HTMLDivElement>(null)
   const started = useRef(false)
 
@@ -52,7 +56,7 @@ export default function CompanyView() {
     setBusy(true)
     setNetErr(false)
     try {
-      const r = await post<IntakeResult>('/api/intake', { company: `${existing.company} (${existing.companyBlurb}, ${existing.size})`, turns: next })
+      const r = await post<IntakeResult>('/api/intake', { company: blurb.trim() ? `${name.trim()} (${blurb.trim()})` : name.trim(), turns: next })
       setTurns([...next, { role: 'assistant', content: r.reply }])
       if (r.card) setCard(r.card)
     } catch {
@@ -65,11 +69,11 @@ export default function CompanyView() {
   }
 
   useEffect(() => {
-    if (started.current) return
+    if (!named || started.current) return
     started.current = true
     send([])
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [named])
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }, [turns, busy])
@@ -84,6 +88,8 @@ export default function CompanyView() {
 
   const full: ChallengeCard | null = card ? {
         ...existing,
+        company: name.trim() || existing.company,
+        companyBlurb: blurb.trim() || existing.companyBlurb,
         ...card,
         format: card.format === 'taster' ? 'taster' : format,
         where,
@@ -103,9 +109,44 @@ export default function CompanyView() {
 
       {step === 0 && (
         <>
-          <StepHeader eyebrow={`Step 1 · ${existing.company}`} title="What problem could people solve with you?">
+          <StepHeader eyebrow="Step 1" title={named ? `What problem could people solve with ${name.trim()}?` : 'Who are you?'}>
             Bring a challenge, not a booth. You meet people after you’ve seen them work.
           </StepHeader>
+          {!named ? (
+            <form
+              className="card mx-auto max-w-2xl space-y-4 p-6"
+              onSubmit={(e) => {
+                e.preventDefault()
+                if (name.trim()) setNamed(true)
+              }}
+            >
+              <label className="block space-y-1">
+                <span className="text-lg font-bold">Company name</span>
+                <input className="input" placeholder="e.g. Virta Grid" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-lg font-bold">What you do, in one line</span>
+                <input className="input" placeholder="e.g. Battery monitoring for homes, 12 people" value={blurb} onChange={(e) => setBlurb(e.target.value)} />
+              </label>
+              <div className="flex flex-wrap gap-3">
+                <button className="btn-primary" disabled={!name.trim()}>
+                  Continue
+                </button>
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  onClick={() => {
+                    setName(existing.company)
+                    setBlurb(`${existing.companyBlurb}, ${existing.size}`)
+                    setNamed(true)
+                  }}
+                >
+                  Use demo company: {existing.company}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <>
           <div className="mx-auto flex max-w-3xl gap-1.5 rounded-3xl bg-ink/6 p-1.5">
             {(['talk', 'library'] as const).map((m) => (
               <button
@@ -196,7 +237,9 @@ export default function CompanyView() {
           </div>
             </>
           )}
-          <NavBar onNext={() => go(1)} disabled={!card} hint={mode === 'library' ? 'Pick a task above' : 'Answer the 3 questions first'} nextLabel="Review challenge" />
+            </>
+          )}
+          <NavBar onNext={() => go(1)} disabled={!card} hint={!named ? 'Tell us who you are first' : mode === 'library' ? 'Pick a task above' : 'Answer the 3 questions first'} nextLabel="Review challenge" />
         </>
       )}
 

@@ -64,11 +64,11 @@ const TranslateOut = z.object({
 })
 
 const RecapOut = z.object({
-  common_ground: z.array(z.string()).describe('Topics both sides independently mentioned'),
+  common_ground: z.array(z.string()).describe('2-4 short points about the task and approach that came up from both sides'),
   company_heard: z.string().describe('What the company host said in their own words, condensed neutrally'),
   talent_heard: z.string().describe('What the participant said in their own words, condensed neutrally'),
-  open_questions: z.array(z.string()).describe('Practical questions either side still has (contract, schedule, permits, language)'),
-  suggested_next_step: z.string().describe('A concrete next step both agreed to, or "Both sides to decide" if unclear'),
+  open_questions: z.array(z.string()).describe('2-3 practical questions for the next meeting: ones either side raised, otherwise what to clarify about the work itself (scope, data, tools, schedule). Never about the person'),
+  suggested_next_step: z.string().describe('One concrete next step, based on the company’s promised follow-up and any booked time'),
 })
 
 async function askGemini<T extends z.ZodType>(schema: T, system: string, messages: Anthropic.MessageParam[]): Promise<z.infer<T> | null> {
@@ -265,11 +265,21 @@ ${GUARDRAILS}`
 })
 
 app.post('/api/recap', async (req, res) => {
-  const { cardTitle = '', companyNote = '', talentNote = '' } = (req.body ?? {}) as Record<string, string>
+  const { cardTitle = '', problem = '', companyNote = '', talentNote = '', debrief = '', promise = '', booked = '' } = (req.body ?? {}) as Record<string, string>
   const system = `After a 20-minute sprint at a recruitment event, both sides left a short voice note. Write a neutral recap that BOTH sides will see.
 Use only what they said. Do not evaluate the participant, do not judge fit, do not recommend hiring or rejecting.
 ${GUARDRAILS}`
-  const content = `Sprint: ${cardTitle}\n\nCompany host note:\n${companyNote}\n\nParticipant note:\n${talentNote}`
+  const content = [
+    `Sprint task: ${cardTitle}`,
+    problem && `The company's problem: ${problem}`,
+    debrief && `Debrief (same questions for everyone) and the participant's answers:\n${debrief}`,
+    `Participant's own note:\n${talentNote}`,
+    `Company host's note:\n${companyNote}`,
+    promise && `The company promised this next step if both say yes: ${promise}`,
+    booked && `Time booked: ${booked}`,
+  ]
+    .filter(Boolean)
+    .join('\n\n')
   const out = await ask(RecapOut, system, [{ role: 'user', content }])
   res.json(out ? { ...out, mode: 'live' } : DEMO_RECAP)
 })
