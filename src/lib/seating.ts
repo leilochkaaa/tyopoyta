@@ -20,7 +20,9 @@ export interface SeatingResult {
 
 export function allocate(cards: ChallengeCard[], talents: Talent[], lotterySeed = 7): SeatingResult {
   const open = cards.filter((c) => c.status === 'approved')
-  const sessionCount = (card: ChallengeCard) => card.format === 'team' ? Math.max(card.rounds, card.teamTasks?.length ?? 0, 1) : card.rounds
+  // A team table with several tasks keeps one group for all of them; otherwise every round gets new people.
+  const multiSession = (card: ChallengeCard) => card.format === 'team' && (card.teamTasks?.length ?? 0) > 1
+  const sessionCount = (card: ChallengeCard) => (multiSession(card) ? card.teamTasks!.length : card.rounds)
   const rounds = Math.max(...open.map(sessionCount))
   const free: Record<string, number[]> = Object.fromEntries(open.map((c) => [c.id, Array(sessionCount(c)).fill(c.seatsPerRound)]))
   const busy: Record<string, Set<number>> = Object.fromEntries(talents.map((t) => [t.code, new Set<number>()]))
@@ -49,7 +51,7 @@ export function allocate(cards: ChallengeCard[], talents: Talent[], lotterySeed 
       if (!table || !free[table]) continue
       let placed = false
       const card = open.find((c) => c.id === table)!
-      if (card.format === 'team') {
+      if (multiSession(card)) {
         const allRoundsFree = Array.from({ length: sessionCount(card) }, (_, r) => r).every((r) => free[table][r] > 0 && !busy[t.code].has(r))
         if (allRoundsFree) {
           for (let r = 0; r < sessionCount(card); r++) {

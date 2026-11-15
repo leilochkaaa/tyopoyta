@@ -81,11 +81,11 @@ export default function ChallengeCardView({
               <p>{card.individualChallenge.instructions}</p>
             </div>
           )}
-          {card.format === 'team' && card.teamTasks?.length ? (
+          {card.format === 'team' && (card.teamTasks?.length ?? 0) > 1 ? (
             <div>
               <div className="mb-2 text-lg font-bold">Team sessions · 20 min each</div>
               <ol className="space-y-2">
-                {card.teamTasks.map((task, i) => (
+                {card.teamTasks!.map((task, i) => (
                   <li key={`${task.title}-${i}`} className="rounded-2xl bg-paper p-3 text-lg">
                     <span className="font-bold text-brand">Session {i + 1}: {task.title}</span>
                     <p>{task.instructions}</p>
@@ -105,7 +105,7 @@ export default function ChallengeCardView({
             </div>
           ) : null}
           {card.format === 'team' && <TeamPlan />}
-          {card.format === 'team' && card.parts?.length && !card.teamTasks?.length ? <TeamParts card={card} /> : null}
+          {card.format === 'team' && card.parts?.length && (card.teamTasks?.length ?? 0) <= 1 ? <TeamParts card={card} /> : null}
           <div>
             <div className="mb-2 text-lg font-bold">What good looks like</div>
             <ul className="space-y-1.5 text-lg">

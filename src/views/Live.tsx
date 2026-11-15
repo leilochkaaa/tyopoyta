@@ -216,7 +216,7 @@ export default function LiveView({ as, tableId = 'kvanttia' }: { as: 'talent' | 
   const { cards, talents, me, go, livePeople } = useStore()
   const table = cards.find((c) => c.id === tableId)!
   const isTeam = table.format === 'team'
-  const sessionCount = isTeam ? Math.max(1, table.teamTasks?.length ?? table.rounds) : 1
+  const sessionCount = isTeam && (table.teamTasks?.length ?? 0) > 1 ? table.teamTasks!.length : 1
   const [session, setSession] = useState(1)
   const [sessionSnapshots, setSessionSnapshots] = useState<Record<number, SessionSnapshot>>({})
   const [completedSessions, setCompletedSessions] = useState<Record<number, boolean>>({})
@@ -234,13 +234,14 @@ export default function LiveView({ as, tableId = 'kvanttia' }: { as: 'talent' | 
     if (assigned) setSession(Math.min(sessionCount, assigned.round + 1))
   }, [as, allocation, me.code, sessionCount, table.id])
   const seated = useMemo(() => {
-    const seats = allocation.seats.filter((s) => s.table === table.id && s.round === round)
+    // One session: the demo shows one round, plus real people from whichever round the lottery gave them.
+    const seats = allocation.seats.filter((s) => s.table === table.id && (s.round === round || (sessionCount === 1 && isRealCode(s.talent))))
     const codes = seats.map((s) => s.talent).filter((c) => c !== me.code)
     // a freshly published table has no lottery seats yet — fill it for the demo
     const pad = talents.map((t) => t.code).filter((c) => c !== me.code && !codes.includes(c) && !c.startsWith('T-2'))
     const realFirst = [...codes].sort((a, b) => Number(isRealCode(b)) - Number(isRealCode(a)))
     return [...(as === 'talent' ? [me.code] : []), ...realFirst, ...pad].slice(0, table.seatsPerRound)
-  }, [allocation, talents, me.code, table, as, isRealCode, round])
+  }, [allocation, talents, me.code, table, as, isRealCode, round, sessionCount])
 
   const [phase, setPhase] = useState(0)
   const [secs, setSecs] = useState(EVENT.sprintMinutes * 60)
@@ -299,7 +300,7 @@ export default function LiveView({ as, tableId = 'kvanttia' }: { as: 'talent' | 
       )
     : [seated]
   const fallbackTeams = [0, 1, 2].map((team) => seated.filter((_, index) => (index % 3 + round * Math.floor(index / 3)) % 3 === team))
-  const teams = isTeam && allocatedTeams.some((team) => team.length) ? allocatedTeams : isTeam ? fallbackTeams : [seated]
+  const teams = isTeam && sessionCount > 1 && allocatedTeams.some((team) => team.length) ? allocatedTeams : isTeam ? fallbackTeams : [seated]
   const activeTeamTask = isTeam ? table.teamTasks?.at(Math.min(round, (table.teamTasks?.length ?? 1) - 1)) : undefined
   const partOf = (j: number) => activeTeamTask?.parts?.at(j % 4)?.split(':')[0] ?? (table.teamTasks?.length ? `Session ${session} part ${j + 1}` : table.parts?.at(j % 4)?.split(':')[0] ?? `Part ${j + 1}`)
   const simLine = (c: string) => {

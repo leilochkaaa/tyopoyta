@@ -29,10 +29,10 @@ const WHERES = [
 ] as const
 const FOLLOW_UPS = ['45-min follow-up within 7 days if it’s mutual', 'Interview the same week if it’s mutual', 'Paid trial day (työkokeilu) within 2 weeks if it’s mutual']
 const individualDefault = (): ChallengeTask => ({ title: 'Your own approach', instructions: 'Before joining the team, write down how you would start solving the problem and why.' })
+// One session by default: a new group of 12 every round, so the company meets 36 people.
+// A company can add sessions to keep one group for several tasks.
 const teamDefaults = (c: IntakeResult['card']): ChallengeTask[] => [
   { title: c?.title ?? 'Main team challenge', instructions: c?.atTheTable ?? 'Work together on the company problem and prepare a clear handover.', parts: c?.parts, teamResult: c?.teamResult },
-  { title: 'Find the strongest next step', instructions: 'Use the evidence from the first session to choose one practical next step.' },
-  { title: 'Explain and improve the solution', instructions: 'Make the solution clearer, testable and useful to the people affected.' },
 ]
 
 export default function CompanyView() {
@@ -109,7 +109,7 @@ export default function CompanyView() {
         format: card.format === 'taster' ? 'taster' : format,
         where,
         seatsPerRound: card.format === 'taster' ? 6 : format === 'team' ? 12 : 4,
-        rounds: format === 'team' ? Math.max(1, teamTasks.length) : existing.rounds,
+        rounds: format === 'team' && teamTasks.length > 1 ? teamTasks.length : existing.rounds,
         followUp,
         status: approved ? 'approved' : 'draft',
         daysBeforeEvent: 21,
