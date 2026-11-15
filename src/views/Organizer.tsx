@@ -195,7 +195,7 @@ export default function OrganizerView() {
               <div>
                 <h2 className="text-2xl font-extrabold">Seat lottery</h2>
                 <p className="mt-1 text-lg text-ink/75">
-                  {talents.length} people, {ready.length} tables, 3 rounds. Everyone’s 1st choice comes first.
+                  {talents.length} people, {ready.length} tables, team tasks reshuffle each session. Everyone’s 1st choice comes first.
                 </p>
               </div>
               <button className="btn-primary text-lg" onClick={() => setSeating(allocate(cards, talents, Date.now() % 1000))}>
@@ -218,7 +218,7 @@ export default function OrganizerView() {
             )}
             <div className="mt-6 space-y-3">
               {ready.map((c) => {
-                const byRound = EVENT.rounds.map((_, r) => seating?.seats.filter((s) => s.table === c.id && s.round === r).length ?? 0)
+                const byRound = Array.from({ length: c.rounds }, (_, r) => seating?.seats.filter((s) => s.table === c.id && s.round === r).length ?? 0)
                 return (
                   <div key={c.id} className="flex items-center gap-3">
                     <div className="w-28 truncate font-semibold sm:w-44 sm:text-lg">{c.company}</div>

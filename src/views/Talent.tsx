@@ -311,7 +311,7 @@ export default function TalentView() {
                   const c = cards.find((x) => x.id === s.table)!
                   return (
                     <div key={s.table} className="flex items-center gap-4 rounded-2xl bg-paper p-4">
-                      <div className="w-16 font-display text-2xl font-extrabold">{EVENT.rounds[s.round]}</div>
+                      <div className="w-16 font-display text-2xl font-extrabold">{EVENT.rounds[s.round] ?? `S${s.round + 1}`}</div>
                       <div className="flex-1">
                         <div className="text-lg font-bold">{c.company}</div>
                         <div className="text-ink/70">{c.where === 'online' ? 'Online, video link by email' : c.format === 'team' ? 'Team sprint, Sello Library' : 'Sello Library'}</div>

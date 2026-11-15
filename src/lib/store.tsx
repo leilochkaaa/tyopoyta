@@ -60,7 +60,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       .catch(() => {})
   }, [tick])
 
-  const allCards = useMemo(() => [...cards, ...liveCards.filter((c) => !cards.some((x) => x.id === c.id))], [cards, liveCards])
+  const allCards = useMemo(
+    () => [...cards.map((card) => liveCards.find((liveCard) => liveCard.id === card.id) ?? card), ...liveCards.filter((liveCard) => !cards.some((card) => card.id === liveCard.id))],
+    [cards, liveCards],
+  )
   const talents = useMemo(() => {
     const real = livePeople.filter((p) => p.code !== me.code)
     const mine = me.choices.length ? [me] : []

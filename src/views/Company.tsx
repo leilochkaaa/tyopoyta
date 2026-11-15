@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Bot, CheckCircle2, LibraryBig, Loader2, MessageSquare, Pencil, Send, Sparkles } from 'lucide-react'
+import { Bot, CheckCircle2, LibraryBig, Loader2, MessageSquare, Pencil, Plus, Send, Sparkles, Trash2 } from 'lucide-react'
 import { useSpeech } from '../lib/useSpeech'
 import MicButton from './MicButton'
 import { post, useStore } from '../lib/store'
-import type { ChallengeCard, IntakeResult, IntakeTurn } from '../lib/types'
+import type { ChallengeCard, ChallengeTask, IntakeResult, IntakeTurn } from '../lib/types'
 import ChallengeCardView from './ChallengeCardView'
 import LiveView from './Live'
 import TaskLibrary from './TaskLibrary'
@@ -28,6 +28,12 @@ const WHERES = [
   { id: 'both', title: 'Both' },
 ] as const
 const FOLLOW_UPS = ['45-min follow-up within 7 days if it’s mutual', 'Interview the same week if it’s mutual', 'Paid trial day (työkokeilu) within 2 weeks if it’s mutual']
+const individualDefault = (): ChallengeTask => ({ title: 'Your own approach', instructions: 'Before joining the team, write down how you would start solving the problem and why.' })
+const teamDefaults = (c: IntakeResult['card']): ChallengeTask[] => [
+  { title: c?.title ?? 'Main team challenge', instructions: c?.atTheTable ?? 'Work together on the company problem and prepare a clear handover.', parts: c?.parts, teamResult: c?.teamResult },
+  { title: 'Find the strongest next step', instructions: 'Use the evidence from the first session to choose one practical next step.' },
+  { title: 'Explain and improve the solution', instructions: 'Make the solution clearer, testable and useful to the people affected.' },
+]
 
 export default function CompanyView() {
   const { cards, upsertCard } = useStore()
@@ -49,6 +55,8 @@ export default function CompanyView() {
   const [name, setName] = useState('')
   const [blurb, setBlurb] = useState('')
   const [named, setNamed] = useState(false)
+  const [individualChallenge, setIndividualChallenge] = useState<ChallengeTask>(individualDefault)
+  const [teamTasks, setTeamTasks] = useState<ChallengeTask[]>([])
   const bottom = useRef<HTMLDivElement>(null)
   const started = useRef(false)
 
@@ -60,7 +68,10 @@ export default function CompanyView() {
     try {
       const r = await post<IntakeResult>('/api/intake', { company: blurb.trim() ? `${name.trim()} (${blurb.trim()})` : name.trim(), turns: next })
       setTurns([...next, { role: 'assistant', content: r.reply }])
-      if (r.card) setCard(r.card)
+      if (r.card) {
+        setCard(r.card)
+        setTeamTasks(teamDefaults(r.card))
+      }
     } catch {
       setNetErr(true)
       const last = next.at(-1)
@@ -93,9 +104,12 @@ export default function CompanyView() {
         company: name.trim() || existing.company,
         companyBlurb: blurb.trim() || existing.companyBlurb,
         ...card,
+        individualChallenge,
+        teamTasks,
         format: card.format === 'taster' ? 'taster' : format,
         where,
         seatsPerRound: card.format === 'taster' ? 6 : format === 'team' ? 12 : 4,
+        rounds: format === 'team' ? Math.max(1, teamTasks.length) : existing.rounds,
         followUp,
         status: approved ? 'approved' : 'draft',
         daysBeforeEvent: 21,
@@ -166,6 +180,7 @@ export default function CompanyView() {
                 onPick={(t) => {
                   const { id: _id, sector: _sector, ...picked } = t
                   setCard(picked)
+                  setTeamTasks(picked.teamTasks?.length ? picked.teamTasks : teamDefaults(picked))
                   if (t.format !== 'taster') setFormat(t.format)
                   go(1)
                 }}
@@ -291,6 +306,10 @@ export default function CompanyView() {
             )}
             {!approved && card && (
               <div className="card space-y-4 p-6">
+                <div>
+                  <h2 className="text-2xl font-extrabold">Customize your challenge</h2>
+                  <p className="mt-1 text-lg text-ink/70">Adjust the wording, individual challenge, and team sessions before publishing.</p>
+                </div>
                 <button className="btn-ghost" onClick={() => setEditing((e) => !e)}>
                   <Pencil size={20} /> {editing ? 'Done editing' : 'Edit the text'}
                 </button>
@@ -310,20 +329,36 @@ export default function CompanyView() {
                     </label>
                     {format === 'team' && card.format !== 'taster' && (
                       <>
-                        <span className="block text-lg font-bold">Four parts, one per person</span>
-                        {[0, 1, 2, 3].map((i) => (
-                          <input
-                            key={i}
-                            className="input"
-                            placeholder={`Part ${i + 1}`}
-                            value={card.parts?.at(i) ?? ''}
-                            onChange={(e) => setCard({ ...card, parts: [0, 1, 2, 3].map((k) => (k === i ? e.target.value : card.parts?.at(k) ?? '')) })}
-                          />
-                        ))}
-                        <label className="block space-y-1">
-                          <span className="text-lg font-bold">Together they hand over</span>
-                          <input className="input" value={card.teamResult ?? ''} onChange={(e) => setCard({ ...card, teamResult: e.target.value })} />
-                        </label>
+                        <div className="border-t border-ink/8 pt-4">
+                          <div className="mb-2 text-lg font-bold">Individual challenge</div>
+                          <input className="input" placeholder="Title" value={individualChallenge.title} onChange={(e) => setIndividualChallenge({ ...individualChallenge, title: e.target.value })} />
+                          <textarea className="input mt-2 min-h-20" placeholder="What each person does alone" value={individualChallenge.instructions} onChange={(e) => setIndividualChallenge({ ...individualChallenge, instructions: e.target.value })} />
+                        </div>
+                        <div className="border-t border-ink/8 pt-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-lg font-bold">Team tasks · 20 minutes each</span>
+                            <button type="button" className="btn-ghost px-3 py-2" onClick={() => setTeamTasks([...teamTasks, { title: `Team task ${teamTasks.length + 1}`, instructions: '' }])}>
+                              <Plus size={18} /> Add task
+                            </button>
+                          </div>
+                          <div className="mt-3 space-y-4">
+                            {teamTasks.map((task, i) => (
+                              <div key={i} className="rounded-2xl bg-paper p-4">
+                                <div className="mb-2 flex items-center justify-between gap-3">
+                                  <span className="font-bold text-brand">Session {i + 1}</span>
+                                  {teamTasks.length > 1 && (
+                                    <button type="button" className="rounded-xl p-2 text-rose hover:bg-rose-soft" onClick={() => setTeamTasks(teamTasks.filter((_, k) => k !== i))} aria-label={`Remove team task ${i + 1}`}>
+                                      <Trash2 size={18} />
+                                    </button>
+                                  )}
+                                </div>
+                                <input className="input" placeholder="Task title" value={task.title} onChange={(e) => setTeamTasks(teamTasks.map((x, k) => (k === i ? { ...x, title: e.target.value } : x)))} />
+                                <textarea className="input mt-2 min-h-20" placeholder="What the team does and hands over" value={task.instructions} onChange={(e) => setTeamTasks(teamTasks.map((x, k) => (k === i ? { ...x, instructions: e.target.value } : x)))} />
+                              </div>
+                            ))}
+                          </div>
+                          <p className="mt-2 text-ink/70">Teams are reshuffled between sessions to maximize new teammates.</p>
+                        </div>
                       </>
                     )}
                   </div>
