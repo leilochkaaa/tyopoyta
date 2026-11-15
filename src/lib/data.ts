@@ -67,6 +67,15 @@ export const CARDS: ChallengeCard[] = [
     debriefQuestions: ['Which alert would you remove first, and why?', 'Whose idea changed your mind, and how?', 'What would you test with nurses next week?'],
     parts: ['Urgent alerts: what must never be missed', 'Noise: what can go or be bundled', 'Timing: start of shift vs. during a visit', 'The screen: sketch what the nurse sees'],
     teamResult: 'New alert rules on one page: what arrives now, hourly, or never.',
+    individualChallenge: {
+      title: 'Choose one alert to protect',
+      instructions: 'Individually mark the alert you think must reach the nurse immediately and explain why.',
+    },
+    teamTasks: [
+      { title: 'Triage the alerts', instructions: 'Sort the anonymised alerts into urgent, bundle, and remove.', parts: ['Urgent: what must never be missed', 'Noise: what can go or be bundled', 'Timing: when alerts should arrive', 'Evidence: what the logs tell us'], teamResult: 'A first set of alert rules.' },
+      { title: 'Design the nurse flow', instructions: 'Use the phone mock-up to show how the nurse sees and handles the new alert rules.' },
+      { title: 'Defend the change', instructions: 'Prepare a short handover explaining the trade-offs and what to test with nurses next.' },
+    ],
     seatsPerRound: 12,
     rounds: 3,
     status: 'approved',

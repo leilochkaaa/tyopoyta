@@ -81,9 +81,9 @@ export function useSpeech(lang: string, onFinal: (text: string) => void) {
           const { text } = (await res.json()) as { text: string }
           if (text.trim()) finalRef.current(text.trim())
         } catch {
-          // ElevenLabs failed: use the browser's own speech recognition from now on.
+          // A recorder is the cross-browser fallback when native recognition is unavailable.
           setMode('browser')
-          setError('Switched to your browser’s voice. Tap the mic again.')
+          setError(Ctor ? 'Switched to your browser’s voice. Tap the mic again.' : 'Server speech-to-text is unavailable. Use text input or enable ElevenLabs.')
         } finally {
           setInterim('')
         }
@@ -129,8 +129,10 @@ export function useSpeech(lang: string, onFinal: (text: string) => void) {
 
   const start = useCallback(() => {
     setError(null)
-    if (mode === 'elevenlabs' && 'MediaRecorder' in globalThis) startRecorder()
-    else startBrowser()
+    if (mode === 'elevenlabs' && 'MediaRecorder' in globalThis) return startRecorder()
+    if (Ctor) return startBrowser()
+    if ('MediaRecorder' in globalThis) return startRecorder()
+    setError('Voice input is not supported in this browser')
   }, [mode, startRecorder, startBrowser])
 
   const stop = useCallback(() => {

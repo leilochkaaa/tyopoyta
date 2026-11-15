@@ -1,6 +1,13 @@
 export type Format = 'sprint' | 'team' | 'taster'
 export type Where = 'onsite' | 'online' | 'both'
 
+export interface ChallengeTask {
+  title: string
+  instructions: string
+  parts?: string[]
+  teamResult?: string
+}
+
 export interface ChallengeCard {
   id: string
   company: string
@@ -23,6 +30,8 @@ export interface ChallengeCard {
   // Team sprints: one part per teammate + what the team hands over together
   parts?: string[]
   teamResult?: string
+  individualChallenge?: ChallengeTask
+  teamTasks?: ChallengeTask[]
   seatsPerRound: number
   rounds: number
   status: 'approved' | 'draft' | 'missing'

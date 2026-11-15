@@ -145,11 +145,11 @@ app.get('/api/health', (_req, res) => res.json({ ai: hasKey ? 'live' : 'demo', v
 app.post('/api/stt', express.raw({ type: () => true, limit: '15mb' }), async (req, res) => {
   if (!XI_KEY) return res.status(501).json({ error: 'no ElevenLabs key' })
   try {
+    const type = req.get('content-type') ?? 'audio/webm'
     const form = new FormData()
     form.append('model_id', process.env.ELEVENLABS_STT_MODEL ?? 'scribe_v2')
     const lang = String(req.query.lang ?? '').slice(0, 2)
     if (lang) form.append('language_code', lang)
-    const type = req.get('content-type') ?? 'audio/webm'
     const ext = type.includes('mp4') ? 'mp4' : type.includes('ogg') ? 'ogg' : type.includes('wav') ? 'wav' : 'webm'
     form.append('file', new Blob([new Uint8Array(req.body as Buffer)], { type }), `answer.${ext}`)
     const r = await fetch(`${XI_BASE}/v1/speech-to-text?${XI_ZRM.slice(1)}`, { method: 'POST', headers: { 'xi-api-key': XI_KEY }, body: form })

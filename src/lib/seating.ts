@@ -7,6 +7,7 @@ export interface Seat {
   table: string
   round: number
   choiceRank: number
+  team: number
 }
 
 export interface SeatingResult {
@@ -19,8 +20,9 @@ export interface SeatingResult {
 
 export function allocate(cards: ChallengeCard[], talents: Talent[], lotterySeed = 7): SeatingResult {
   const open = cards.filter((c) => c.status === 'approved')
-  const rounds = Math.max(...open.map((c) => c.rounds))
-  const free: Record<string, number[]> = Object.fromEntries(open.map((c) => [c.id, Array(c.rounds).fill(c.seatsPerRound)]))
+  const sessionCount = (card: ChallengeCard) => card.format === 'team' ? Math.max(card.rounds, card.teamTasks?.length ?? 0, 1) : card.rounds
+  const rounds = Math.max(...open.map(sessionCount))
+  const free: Record<string, number[]> = Object.fromEntries(open.map((c) => [c.id, Array(sessionCount(c)).fill(c.seatsPerRound)]))
   const busy: Record<string, Set<number>> = Object.fromEntries(talents.map((t) => [t.code, new Set<number>()]))
   const overflow: Record<string, number> = {}
 
@@ -46,16 +48,50 @@ export function allocate(cards: ChallengeCard[], talents: Talent[], lotterySeed 
       const table = t.choices[rank]
       if (!table || !free[table]) continue
       let placed = false
-      for (let r = 0; r < rounds; r++) {
-        if (free[table][r] > 0 && !busy[t.code].has(r)) {
-          free[table][r]--
-          busy[t.code].add(r)
-          seats.push({ talent: t.code, table, round: r, choiceRank: rank + 1 })
+      const card = open.find((c) => c.id === table)!
+      if (card.format === 'team') {
+        const allRoundsFree = Array.from({ length: sessionCount(card) }, (_, r) => r).every((r) => free[table][r] > 0 && !busy[t.code].has(r))
+        if (allRoundsFree) {
+          for (let r = 0; r < sessionCount(card); r++) {
+            free[table][r]--
+            busy[t.code].add(r)
+            seats.push({ talent: t.code, table, round: r, choiceRank: rank + 1, team: 0 })
+          }
           placed = true
-          break
+        }
+      } else {
+        for (let r = 0; r < rounds; r++) {
+          if (free[table][r] > 0 && !busy[t.code].has(r)) {
+            free[table][r]--
+            busy[t.code].add(r)
+            seats.push({ talent: t.code, table, round: r, choiceRank: rank + 1, team: 0 })
+            placed = true
+            break
+          }
         }
       }
       if (!placed) overflow[table] = (overflow[table] ?? 0) + 1
+    }
+  }
+
+  // Team tables keep one cohort for every task, then use a different
+  // deterministic grouping each round so people meet new teammates.
+  for (const card of open.filter((c) => c.format === 'team')) {
+    for (let r = 0; r < sessionCount(card); r++) {
+      const roundSeats = seats.filter((s) => s.table === card.id && s.round === r)
+      if (roundSeats.length === card.seatsPerRound && card.seatsPerRound % 3 === 0) {
+        // Treat the 12-person cohort as a 4 x 3 grid. Each round uses a
+        // different Latin-square grouping, minimizing repeated pairings.
+        for (const [index, seat] of roundSeats.entries()) {
+          const row = Math.floor(index / 3)
+          const column = index % 3
+          seat.team = (column + r * row) % 3
+        }
+      } else {
+        roundSeats.forEach((seat, index) => {
+          seat.team = index % 3
+        })
+      }
     }
   }
 

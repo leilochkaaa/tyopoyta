@@ -74,8 +74,38 @@ export default function ChallengeCardView({
             </div>
             {card.atTheTable}
           </div>
+          {card.individualChallenge && (
+            <div className="rounded-2xl bg-berry-soft p-4 text-lg">
+              <div className="mb-1 font-bold text-brand">Individual challenge</div>
+              <div className="font-semibold">{card.individualChallenge.title}</div>
+              <p>{card.individualChallenge.instructions}</p>
+            </div>
+          )}
+          {card.format === 'team' && card.teamTasks?.length ? (
+            <div>
+              <div className="mb-2 text-lg font-bold">Team sessions · 20 min each</div>
+              <ol className="space-y-2">
+                {card.teamTasks.map((task, i) => (
+                  <li key={`${task.title}-${i}`} className="rounded-2xl bg-paper p-3 text-lg">
+                    <span className="font-bold text-brand">Session {i + 1}: {task.title}</span>
+                    <p>{task.instructions}</p>
+                    {task.parts?.length ? (
+                      <ul className="mt-2 grid gap-2 sm:grid-cols-2">
+                        {task.parts.map((part, partIndex) => (
+                          <li key={part} className="rounded-xl bg-white p-2 text-base">
+                            <span className="font-bold">{partIndex + 1}.</span> {part}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    {task.teamResult && <p className="mt-2 text-base"><span className="font-bold">Handover:</span> {task.teamResult}</p>}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ) : null}
           {card.format === 'team' && <TeamPlan />}
-          {card.format === 'team' && card.parts?.length ? <TeamParts card={card} /> : null}
+          {card.format === 'team' && card.parts?.length && !card.teamTasks?.length ? <TeamParts card={card} /> : null}
           <div>
             <div className="mb-2 text-lg font-bold">What good looks like</div>
             <ul className="space-y-1.5 text-lg">

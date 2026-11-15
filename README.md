@@ -16,7 +16,7 @@ Keys go in `poyta/.env` or `junction/.env` (never committed):
 | Variable | What it enables | Without it |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | Live Claude (`claude-opus-5-5`): company interview, job-seeker voice interview, skill extraction, shared summary | Scripted demo answers (header badge `AI demo`) |
-| `ELEVENLABS_API_KEY` (+ optional `ELEVENLABS_VOICE_ID`, `ELEVENLABS_STT_MODEL`, `ELEVENLABS_TTS_MODEL`, `ELEVENLABS_BASE_URL` for EU residency) | ElevenLabs Scribe speech-to-text and natural voice for interview questions | Browser Web Speech API |
+| `ELEVENLABS_API_KEY` (+ optional `ELEVENLABS_VOICE_ID`, `ELEVENLABS_STT_MODEL`, `ELEVENLABS_TTS_MODEL`, `ELEVENLABS_BASE_URL` for EU residency) | ElevenLabs Scribe speech-to-text and natural voice for interview questions; recorded microphone input also works in Firefox and other browsers without Web Speech recognition | Browser Web Speech API where supported |
 | `GEMINI_API_KEY` (+ optional `GEMINI_MODEL`, default `gemini-3.5-flash-lite`) | Live AI through Gemini when there is no Anthropic key | Scripted demo answers |
 | `ORGANIZER_PASSWORD` | Password for the organiser workspace | Demo password `espoo2026`, shown on the login screen |
 | `ELEVENLABS_ZERO_RETENTION=true` | ElevenLabs zero-retention mode (enterprise plans only) | Standard ElevenLabs retention |
@@ -30,8 +30,8 @@ Production: `npm run build && npm start` (serves `dist/` + API on `$PORT`).
 | Route | What it shows |
 |---|---|
 | `#welcome` | Who are you? + demo tour |
-| `#company` | 3-question AI interview (voice or text) → Challenge Card + follow-up promise, event day from the host's side |
-| `#talent` | Voice interview → skills tied to quotes, pick 3 tables, self-declared must-haves, offline QR pass, event day (sprint → debrief → double opt-in → Sprint Record) |
+| `#company` | 3-question AI interview (voice or text) → Challenge Card with an individual challenge and configurable team sessions, event day from the host's side |
+| `#talent` | Voice interview → skills tied to quotes, pick 3 tables, self-declared must-haves, offline QR pass, event day with timed, reshuffled team sessions (sprint → debrief → double opt-in → Sprint Record) |
 | `#organizer` | Before: readiness, skills radar → invite companies / prepare people · Event day: blind lottery + fairness check · After: funnel to job |
 | `#evidence` | Sourced numbers behind the design |
 | `#trust` | EU AI Act design: what AI does, never does, data minimisation |
